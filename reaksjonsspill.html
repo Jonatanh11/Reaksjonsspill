@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reaksjonsspill</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0c0f;
+    --surface: #111318;
+    --border: #1e2229;
+    --text: #e8eaf0;
+    --muted: #4a505c;
+    --mono: 'Share Tech Mono', monospace;
+    --display: 'Barlow Condensed', sans-serif;
+
+    --blue:  #2f7fff;
+    --white: #e8eaf0;
+    --green: #00d97e;
+    --red:   #ff3b3b;
+    --yellow:#ffd000;
+    --accent: #ffd000;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--display);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem;
+    overflow-x: hidden;
+  }
+
+  /* Scanlines overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  h1 {
+    font-family: var(--display);
+    font-weight: 900;
+    font-size: clamp(2.5rem, 8vw, 5rem);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    line-height: 1;
+    color: var(--accent);
+    text-shadow: 0 0 40px rgba(255,208,0,0.3);
+    margin-bottom: 0.2rem;
+  }
+
+  .subtitle {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--muted);
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    margin-bottom: 2.5rem;
+  }
+
+  /* Connect button */
+  #connect-btn {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 0.7rem 2rem;
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-bottom: 2.5rem;
+    position: relative;
+    overflow: hidden;
+  }
+  #connect-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--accent);
+    transform: translateX(-100%);
+    transition: transform 0.15s;
+    z-index: -1;
+  }
+  #connect-btn:hover { color: #000; }
+  #connect-btn:hover::before { transform: translateX(0); }
+  #connect-btn.connected { border-color: var(--green); color: var(--green); }
+  #connect-btn.connected:hover { color: #000; }
+  #connect-btn.connected::before { background: var(--green); }
+
+  /* Main grid */
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    width: 100%;
+    max-width: 720px;
+    margin-bottom: 1rem;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 1.5rem;
+    position: relative;
+  }
+
+  .card-label {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.6rem;
+  }
+
+  /* Status card */
+  #status-card {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 1.2rem 1.5rem;
+  }
+
+  .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
+  .status-dot.waiting  { background: var(--muted); }
+  .status-dot.active   { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 1s infinite; }
+  .status-dot.correct  { background: var(--green);  box-shadow: 0 0 8px var(--green); }
+  .status-dot.wrong    { background: var(--red);    box-shadow: 0 0 8px var(--red); }
+  .status-dot.toolate  { background: var(--red);    box-shadow: 0 0 8px var(--red); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  #status-text {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 1.4rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text);
+    transition: color 0.2s;
+  }
+
+  /* Color indicator */
+  #color-card { grid-column: 1 / -1; text-align: center; padding: 2rem 1.5rem; }
+
+  #color-display {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    margin: 0 auto 1rem;
+    background: var(--muted);
+    transition: background 0.3s, box-shadow 0.3s;
+    border: 2px solid rgba(255,255,255,0.08);
+  }
+  #color-display.active-blue   { background: var(--blue);   box-shadow: 0 0 30px rgba(47,127,255,0.5); }
+  #color-display.active-white  { background: #fff;          box-shadow: 0 0 30px rgba(255,255,255,0.5); }
+  #color-display.active-green  { background: var(--green);  box-shadow: 0 0 30px rgba(0,217,126,0.5); }
+  #color-display.active-red    { background: var(--red);    box-shadow: 0 0 30px rgba(255,59,59,0.5); }
+  #color-display.active-yellow { background: var(--yellow); box-shadow: 0 0 30px rgba(255,208,0,0.5); }
+
+  #color-name {
+    font-family: var(--display);
+    font-weight: 900;
+    font-size: 2.5rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    transition: color 0.3s;
+  }
+  #color-name.active-blue   { color: var(--blue); }
+  #color-name.active-white  { color: #fff; }
+  #color-name.active-green  { color: var(--green); }
+  #color-name.active-red    { color: var(--red); }
+  #color-name.active-yellow { color: var(--yellow); }
+
+  /* Stats */
+  .stat-value {
+    font-family: var(--display);
+    font-weight: 900;
+    font-size: 3rem;
+    line-height: 1;
+    color: var(--text);
+  }
+  .stat-unit {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    margin-top: 0.3rem;
+  }
+
+  /* Score */
+  #score-card { text-align: center; }
+  #score-val { color: var(--accent); }
+
+  /* Best time */
+  #best-card { text-align: center; }
+  #best-val { color: var(--green); }
+
+  /* Last result banner */
+  #result-banner {
+    grid-column: 1 / -1;
+    padding: 1rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  #result-banner.show { opacity: 1; }
+  #result-text {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 1.2rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  #result-time {
+    font-family: var(--mono);
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+
+  /* Log */
+  .log-card {
+    width: 100%;
+    max-width: 720px;
+  }
+  .log-card .card-label { margin-bottom: 0.8rem; }
+  #log {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--muted);
+    height: 120px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 2px;
+  }
+  .log-entry { display: flex; gap: 1rem; }
+  .log-time { color: var(--border); flex-shrink: 0; }
+  .log-msg.correct { color: var(--green); }
+  .log-msg.wrong   { color: var(--red); }
+  .log-msg.toolate { color: var(--red); opacity: 0.7; }
+  .log-msg.info    { color: var(--muted); }
+
+  /* Streak */
+  #streak-display {
+    font-family: var(--display);
+    font-weight: 900;
+    font-size: 1rem;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-left: auto;
+    padding-right: 0.5rem;
+  }
+  #streak-display.hot { color: var(--accent); }
+
+  /* Not supported warning */
+  #no-serial {
+    display: none;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--red);
+    text-align: center;
+    margin-bottom: 1rem;
+    letter-spacing: 0.1em;
+  }
+</style>
+</head>
+<body>
+
+<h1>Reaksjon</h1>
+<p class="subtitle">// arduino reaksjonsspill v1.0</p>
+
+<p id="no-serial">⚠ Web Serial støttes ikke — bruk Chrome eller Edge</p>
+
+<button id="connect-btn">[ Koble til Arduino ]</button>
+
+<div class="grid">
+  <div class="card" id="status-card">
+    <div class="status-dot waiting" id="status-dot"></div>
+    <div id="status-text">Venter på tilkobling...</div>
+    <div id="streak-display"></div>
+  </div>
+
+  <div class="card" id="color-card">
+    <div class="card-label">// trykk denne fargen</div>
+    <div id="color-display"></div>
+    <div id="color-name">—</div>
+  </div>
+
+  <div class="card" id="score-card">
+    <div class="card-label">// poeng</div>
+    <div class="stat-value" id="score-val">0</div>
+    <div class="stat-unit">riktige trykk</div>
+  </div>
+
+  <div class="card" id="best-card">
+    <div class="card-label">// beste tid</div>
+    <div class="stat-value" id="best-val">—</div>
+    <div class="stat-unit">millisekunder</div>
+  </div>
+
+  <div id="result-banner">
+    <div id="result-text">—</div>
+    <div id="result-time"></div>
+  </div>
+</div>
+
+<div class="card log-card">
+  <div class="card-label">// hendelseslogg</div>
+  <div id="log"></div>
+</div>
+
+<script>
+  // Check Web Serial support
+  if (!('serial' in navigator)) {
+    document.getElementById('no-serial').style.display = 'block';
+    document.getElementById('connect-btn').disabled = true;
+  }
+
+  let port, reader;
+  let score = 0;
+  let bestTime = null;
+  let streak = 0;
+  let lastRoundStart = null;
+
+  const btn        = document.getElementById('connect-btn');
+  const statusDot  = document.getElementById('status-dot');
+  const statusText = document.getElementById('status-text');
+  const colorDisp  = document.getElementById('color-display');
+  const colorName  = document.getElementById('color-name');
+  const scoreVal   = document.getElementById('score-val');
+  const bestVal    = document.getElementById('best-val');
+  const resultBanner = document.getElementById('result-banner');
+  const resultText = document.getElementById('result-text');
+  const resultTime = document.getElementById('result-time');
+  const streakDisp = document.getElementById('streak-display');
+  const log        = document.getElementById('log');
+
+  const colorMap = {
+    'Bla':   { label: 'BLÅ',   cls: 'active-blue' },
+    'Hvit':  { label: 'HVIT',  cls: 'active-white' },
+    'Gronn': { label: 'GRØNN', cls: 'active-green' },
+    'Rod':   { label: 'RØD',   cls: 'active-red' },
+    'Gul':   { label: 'GUL',   cls: 'active-yellow' },
+  };
+
+  btn.addEventListener('click', async () => {
+    if (port) { await disconnect(); return; }
+    try {
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 9600 });
+      btn.textContent = '[ Koble fra ]';
+      btn.classList.add('connected');
+      setStatus('Tilkoblet — venter på spill...', 'waiting');
+      addLog('Tilkoblet Arduino', 'info');
+      readLoop();
+    } catch (e) {
+      addLog('Tilkobling avbrutt', 'info');
+    }
+  });
+
+  async function disconnect() {
+    try { if (reader) { await reader.cancel(); reader = null; } } catch {}
+    try { await port.close(); } catch {}
+    port = null;
+    btn.textContent = '[ Koble til Arduino ]';
+    btn.classList.remove('connected');
+    setStatus('Frakoblet', 'waiting');
+    clearColor();
+    addLog('Frakoblet', 'info');
+  }
+
+  async function readLoop() {
+    const decoder = new TextDecoderStream();
+    port.readable.pipeTo(decoder.writable);
+    reader = decoder.readable.getReader();
+    let buf = '';
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += value;
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        lines.forEach(l => handleLine(l.trim()));
+      }
+    } catch {}
+  }
+
+  function handleLine(line) {
+    if (!line) return;
+    addLog(line, 'info');
+
+    // Detect color from "Trykk: Xxx" or just color names in serial
+    for (const [key, val] of Object.entries(colorMap)) {
+      if (line.includes(key)) {
+        setColor(key);
+        setStatus('TRYKK: ' + val.label, 'active');
+        lastRoundStart = Date.now();
+        hideResult();
+        return;
+      }
+    }
+
+    if (line.includes('Riktig')) {
+      const elapsed = lastRoundStart ? Date.now() - lastRoundStart : null;
+      score++;
+      streak++;
+      scoreVal.textContent = score;
+      if (elapsed && (!bestTime || elapsed < bestTime)) {
+        bestTime = elapsed;
+        bestVal.textContent = elapsed;
+      }
+      setStatus('RIKTIG! 🎯', 'correct');
+      showResult('✓ RIKTIG', elapsed ? elapsed + ' ms' : '', 'correct');
+      addLog('Riktig! ' + (elapsed ? elapsed + ' ms' : ''), 'correct');
+      updateStreak();
+      clearColor();
+    } else if (line.includes('Feil')) {
+      streak = 0;
+      setStatus('FEIL KNAPP', 'wrong');
+      showResult('✗ FEIL KNAPP', '', 'wrong');
+      addLog('Feil knapp', 'wrong');
+      updateStreak();
+      clearColor();
+    } else if (line.includes('sent')) {
+      streak = 0;
+      setStatus('FOR SENT!', 'toolate');
+      showResult('⏱ FOR SENT', '', 'wrong');
+      addLog('For sent!', 'toolate');
+      updateStreak();
+      clearColor();
+    }
+  }
+
+  function setStatus(text, state) {
+    statusText.textContent = text;
+    statusDot.className = 'status-dot ' + state;
+  }
+
+  function setColor(key) {
+    const c = colorMap[key];
+    colorDisp.className = c.cls;
+    colorName.className = c.cls;
+    colorName.textContent = c.label;
+  }
+
+  function clearColor() {
+    colorDisp.className = '';
+    colorName.className = '';
+    colorName.textContent = '—';
+  }
+
+  function showResult(text, time, type) {
+    resultText.textContent = text;
+    resultText.style.color = type === 'correct' ? 'var(--green)' : 'var(--red)';
+    resultTime.textContent = time;
+    resultBanner.classList.add('show');
+  }
+
+  function hideResult() {
+    resultBanner.classList.remove('show');
+  }
+
+  function updateStreak() {
+    if (streak >= 3) {
+      streakDisp.textContent = streak + '× STREAK 🔥';
+      streakDisp.classList.add('hot');
+    } else {
+      streakDisp.textContent = '';
+      streakDisp.classList.remove('hot');
+    }
+  }
+
+  function addLog(msg, type) {
+    const now = new Date();
+    const t = now.toTimeString().slice(0, 8);
+    const entry = document.createElement('div');
+    entry.className = 'log-entry';
+    entry.innerHTML = `<span class="log-time">${t}</span><span class="log-msg ${type}">${msg}</span>`;
+    log.prepend(entry);
+    while (log.children.length > 50) log.removeChild(log.lastChild);
+  }
+</script>
+</body>
+</html>
